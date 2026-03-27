@@ -1,3 +1,4 @@
+import uuid
 from functools import lru_cache
 from typing import Literal, Optional
 
@@ -14,6 +15,7 @@ class BaseConfig(BaseSettings):
 
 class GlobalConfig(BaseConfig):
     LOG_LEVEL: LogLevel = "INFO"
+    DATABASE_URL: Optional[str] = None
 
 
 class DevConfig(GlobalConfig):
@@ -23,7 +25,7 @@ class DevConfig(GlobalConfig):
 
 
 class TestConfig(GlobalConfig):
-    LOG_LEVEL: LogLevel = "INFO"
+    DATABASE_URL: Optional[str] = "sqlite:///:memory:"
 
     model_config = SettingsConfigDict(env_prefix="TEST_")
 
@@ -45,3 +47,40 @@ def get_config(env_state: str):
 
 
 config = get_config(BaseConfig().ENV_STATE)
+
+
+def get_database_config():
+    """Get database configuration for both SQLAlchemy and Alembic"""
+    env_state = BaseConfig().ENV_STATE
+    db_config = get_config(env_state)
+
+    if db_config.DATABASE_URL is None:
+        prefix_by_env = {"dev": "DEV_", "test": "TEST_", "prod": "PROD_"}
+        env_key = (env_state or "").lower()
+        env_prefix = prefix_by_env.get(env_key, "")
+        raise ValueError(
+            f"{env_prefix}DATABASE_URL is not set for the {env_state} environment"
+        )
+
+    config_dict = {
+        "sqlalchemy.url": db_config.DATABASE_URL,
+        "sqlalchemy.echo": True if isinstance(config, DevConfig) else False,
+        "sqlalchemy.future": True,
+        "sqlalchemy.pool_size": 20,
+        "sqlalchemy.max_overflow": 10,
+        "sqlalchemy.pool_timeout": 30,
+    }
+
+    # Add database-specific connect args
+    if db_config.DATABASE_URL.startswith("sqlite"):
+        config_dict["sqlalchemy.connect_args"] = {"check_same_thread": False}
+    elif isinstance(db_config, TestConfig):
+        # PostgreSQL settings for pgbouncer compatibility in test environment
+        config_dict["sqlalchemy.connect_args"] = {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+            "command_timeout": 60,  # Increase timeout for test teardown
+        }
+
+    return config_dict
