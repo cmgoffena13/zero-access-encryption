@@ -15,5 +15,8 @@ install:
 upgrade:
 	uv sync --upgrade --all-extras
 
-run:
-	uv run main.py
+start:
+	docker compose up --build --remove-orphans
+
+stop:
+	docker compose down

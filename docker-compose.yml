@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: zae-postgres
+    environment:
+      POSTGRES_DB: zae
+      POSTGRES_USER: zae
+      POSTGRES_PASSWORD: zae
+    ports:
+      - "5432:5432"
+    volumes:
+      - zae_postgres_data:/var/lib/postgresql
+
+  api:
+    build: .
+    container_name: zae-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - ENV_STATE=dev
+      - DEV_DATABASE_URL=postgresql+asyncpg://zae:zae@postgres:5432/zae
+    depends_on:
+      - postgres
+    volumes:
+      - ./src:/zae/src
+      - ./dev_start.sh:/zae/start.sh
+    command: ["/bin/bash", "/zae/start.sh"]
+
+volumes:
+  zae_postgres_data:

@@ -1,0 +1,84 @@
+# Git
+.git
+.gitignore
+.gitkeep
+.gitattributes
+
+# Old
+__pycache__
+.pytest_cache
+.ruff_cache
+.vscode
+.env
+.logfire
+.cursor
+.DS_Store
+.venv
+.gitignore
+.git
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+src/tests/
+
+# IDE
+.ruff_cache/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursorignore
+
+# Documentation
+LICENSE
+*.md
+!SECURITY.md
+
+# Kubernetes and Helm files (not needed in Docker image)
+watcher/
+helm/
+*.yaml
+*.yml
+
+# Documentation (not needed in production image)
+docs/
+*.md
+
+# Development files
+Makefile
+.pre-commit-config.yaml
+pytest.ini
+ruff.toml
+examples/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# CI/CD (not needed in image)
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# JSON
+*.json
+
