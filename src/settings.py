@@ -16,6 +16,7 @@ class BaseConfig(BaseSettings):
 class GlobalConfig(BaseConfig):
     LOG_LEVEL: LogLevel = "INFO"
     DATABASE_URL: Optional[str] = None
+    REDIS_URL: Optional[str] = None
 
 
 class DevConfig(GlobalConfig):

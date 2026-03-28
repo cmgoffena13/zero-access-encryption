@@ -3,17 +3,17 @@ from sqlmodel import select
 
 from src.database.models import User
 from src.database.session import SessionDep
-from src.routes.models.register import RegisterInput
+from src.routes.models.register import RegisterInput, RegisterOutput
 
 register_router = APIRouter()
 
 
-@register_router.post("/register")
+@register_router.post("/register", response_model=RegisterOutput)
 async def register(
     input: RegisterInput,
     session: SessionDep,
     response: Response,
-):
+) -> RegisterOutput:
     user = User(username=input.username, salt=input.salt, verifier=input.verifier)
     user_id = (
         await session.exec(select(User.id).where(User.username == user.username))
@@ -29,5 +29,14 @@ async def register(
     except Exception as e:
         await session.rollback()
         raise e
+
+    # NOTE A ty thing
+    if user.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User id missing after insert",
+        )
+
     response.status_code = status.HTTP_201_CREATED
-    return {"user_id": user.id}
+    output = RegisterOutput(user_id=user.id)
+    return output

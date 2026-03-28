@@ -5,3 +5,7 @@ class RegisterInput(BaseModel):
     username: str
     salt: Base64Bytes
     verifier: Base64Bytes
+
+
+class RegisterOutput(BaseModel):
+    user_id: int

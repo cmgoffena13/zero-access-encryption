@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from srp import Verifier
 
@@ -10,15 +12,19 @@ from src.routes.models.srp import (
     SRPProofInput,
     SRPProofOutput,
 )
+from src.srp_session_store import SrpSessionStore, get_srp_session_store
 
 srp_router = APIRouter()
 
-# TODO: move to redis
-srp_sessions: dict[str, Verifier] = {}
+SrpStoreDep = Annotated[SrpSessionStore, Depends(get_srp_session_store)]
 
 
 @srp_router.post("/srp/challenge")
-async def srp_challenge(input: SRPChallengeInput, session: SessionDep):
+async def srp_challenge(
+    input: SRPChallengeInput,
+    session: SessionDep,
+    srp_store: SrpStoreDep,
+):
     result = await session.exec(select(User).where(User.username == input.username))
     user = result.first()
     if user is None:
@@ -35,7 +41,7 @@ async def srp_challenge(input: SRPChallengeInput, session: SessionDep):
     if s is None or B is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
-    srp_sessions[input.username] = svr
+    await srp_store.store(input.username, svr)
 
     output = SRPChallengeOutput(s=s, B=B)
 
@@ -43,12 +49,15 @@ async def srp_challenge(input: SRPChallengeInput, session: SessionDep):
 
 
 @srp_router.post("/srp/verify")
-async def srp_proof(input: SRPProofInput, session: SessionDep):
+async def srp_proof(
+    input: SRPProofInput,
+    session: SessionDep,
+    srp_store: SrpStoreDep,
+):
     username = input.username
-    if username not in srp_sessions:
+    svr = await srp_store.pop(username)
+    if svr is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
-
-    svr = srp_sessions.pop(username)
     M_bytes = input.M
 
     HAMK_bytes = svr.verify_session(M_bytes)

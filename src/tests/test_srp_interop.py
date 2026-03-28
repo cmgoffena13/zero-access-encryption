@@ -3,7 +3,7 @@ import base64
 import srp
 from srp import User, create_salted_verification_key
 
-from src.tests.conftest import client, override_get_session
+from src.routes.models.register import RegisterOutput
 
 
 def test_srp_register_and_login_flow(client, override_get_session):
@@ -21,7 +21,8 @@ def test_srp_register_and_login_flow(client, override_get_session):
         },
     )
     assert r.status_code == 201
-    assert r.json()["user_id"] >= 1
+    reg = RegisterOutput.model_validate(r.json())
+    assert reg.user_id >= 1
 
     usr = User(username, password, hash_alg=srp.SHA1, ng_type=srp.NG_2048)
     _I, A = usr.start_authentication()

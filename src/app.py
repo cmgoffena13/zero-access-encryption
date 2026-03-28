@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import redis.asyncio as redis
 import structlog
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
@@ -13,6 +14,8 @@ from src.logging_conf import setup_logging
 from src.routes.data import data_router
 from src.routes.register import register_router
 from src.routes.srp import srp_router
+from src.settings import BaseConfig, get_config
+from src.srp_session_store import SrpSessionStore
 from src.types import ORJSONResponse
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -26,8 +29,15 @@ async def lifespan(app: FastAPI):
     setup_logging()
     await setup_database()
     await test_connection()
+    cfg = get_config(BaseConfig().ENV_STATE)
+    if cfg.REDIS_URL:
+        r = redis.from_url(cfg.REDIS_URL, decode_responses=False)
+        app.state.srp_session_store = SrpSessionStore(r)
+    else:
+        app.state.srp_session_store = SrpSessionStore(None)
     yield
     print(panel.Panel("Server is shutting down...", border_style="red"))
+    await app.state.srp_session_store.aclose()
     await engine.dispose()
 
 

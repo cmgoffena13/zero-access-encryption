@@ -11,6 +11,7 @@ dependencies = [
     "orjson>=3.11.7",
     "prek>=0.3.8",
     "pydantic-settings>=2.13.1",
+    "redis>=7.4.0",
     "rich>=14.3.3",
     "scalar-fastapi>=1.8.1",
     "sqlalchemy[asyncio]>=2.0.48",
@@ -38,4 +39,5 @@ dev = [
     "pytest-xdist>=3.8.0",
     "ruff>=0.15.8",
     "ty>=0.0.26",
+    "fakeredis>=2.34.1",
 ]

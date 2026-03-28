@@ -11,6 +11,12 @@ services:
     volumes:
       - zae_postgres_data:/var/lib/postgresql
 
+  redis:
+    image: redis:7-alpine
+    container_name: zae-redis
+    ports:
+      - "6379:6379"
+
   api:
     build: .
     container_name: zae-api
@@ -21,8 +27,10 @@ services:
     environment:
       - ENV_STATE=dev
       - DEV_DATABASE_URL=postgresql+asyncpg://zae:zae@postgres:5432/zae
+      - DEV_REDIS_URL=redis://redis:6379/0
     depends_on:
       - postgres
+      - redis
     volumes:
       - ./src:/zae/src
       - ./dev_start.sh:/zae/start.sh

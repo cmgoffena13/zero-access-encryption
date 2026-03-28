@@ -6,6 +6,7 @@ os.environ["ENV_STATE"] = "test"
 from typing import AsyncGenerator, Generator
 
 import pytest
+from fakeredis import FakeAsyncRedis
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -17,6 +18,7 @@ from src.database.models import (  # noqa: F401 — register models on SQLModel 
     UserData,
 )
 from src.database.session import async_session_factory, engine, get_session
+from src.srp_session_store import SrpSessionStore
 
 
 @pytest.fixture(scope="session")
@@ -27,6 +29,8 @@ def anyio_backend():
 @pytest.fixture
 def client() -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
+        fake = FakeAsyncRedis(decode_responses=False)
+        app.state.srp_session_store = SrpSessionStore(fake)
         yield test_client
 
 
@@ -46,7 +50,7 @@ async def override_get_session(db_session: AsyncSession):
 
     app.dependency_overrides[get_session] = _override
     yield
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_session, None)
 
 
 @pytest.fixture(autouse=True)
@@ -58,14 +62,6 @@ async def truncate_tables():
             await conn.execute(text("DELETE FROM users"))
     except Exception as e:
         print(f"Warning: failed to truncate tables: {e}")
-
-
-@pytest.fixture(autouse=True)
-def clear_srp_sessions():
-    yield
-    from src.routes.srp import srp_sessions
-
-    srp_sessions.clear()
 
 
 @pytest.fixture()
