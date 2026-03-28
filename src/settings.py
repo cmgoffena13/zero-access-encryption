@@ -25,7 +25,7 @@ class DevConfig(GlobalConfig):
 
 
 class TestConfig(GlobalConfig):
-    DATABASE_URL: Optional[str] = "sqlite:///:memory:"
+    DATABASE_URL: Optional[str] = "sqlite+aiosqlite:///:memory:"
 
     model_config = SettingsConfigDict(env_prefix="TEST_")
 
