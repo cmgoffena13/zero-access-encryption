@@ -4,104 +4,40 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Zero-access encryption POC</title>
-    <style>
-      :root {
-        font-family: system-ui, sans-serif;
-        line-height: 1.4;
-        color: #1a1a1a;
-        background: #f6f6f6;
-      }
-      body {
-        max-width: 40rem;
-        margin: 2rem auto;
-        padding: 0 1rem;
-      }
-      h1 {
-        font-size: 1.25rem;
-      }
-      section {
-        background: #fff;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-      }
-      h2 {
-        font-size: 1rem;
-        margin: 0 0 0.75rem;
-      }
-      label {
-        display: block;
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
-      }
-      input,
-      textarea {
-        width: 100%;
-        box-sizing: border-box;
-        margin-top: 0.25rem;
-      }
-      textarea {
-        min-height: 5rem;
-        font-family: inherit;
-      }
-      button {
-        margin-top: 0.75rem;
-        padding: 0.4rem 0.75rem;
-        cursor: pointer;
-      }
-      #log {
-        font-size: 0.8rem;
-        max-height: 10rem;
-        overflow: auto;
-        background: #111;
-        color: #cfcfcf;
-        padding: 0.75rem;
-        border-radius: 6px;
-      }
-      #log .err {
-        color: #f88;
-      }
-      .blurb {
-        font-size: 0.9rem;
-        color: #444;
-      }
-    </style>
+    <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
     <h1>Zero-access encryption (POC)</h1>
     <p class="blurb">
-      The server never receives your password or plaintext notes—only an SRP verifier and
-      encrypted blobs. Unlock the vault in your browser with your password; PBKDF2 + AES-GCM
-      uses your registration salt.
+      The server never receives your password or plaintext—only an SRP verifier and encrypted
+      blobs. Decrypt on your machine in the browser; PBKDF2 + AES-GCM uses your registration salt.
     </p>
 
     <section>
       <h2>1. Register</h2>
-      <label>Username <input id="regUser" autocomplete="username" /></label>
-      <label>Password <input id="regPass" type="password" autocomplete="new-password" /></label>
-      <button type="button" id="btnRegister">Register</button>
+      <label>Username <input id="register-username" autocomplete="username" /></label>
+      <label>Password <input id="register-password" type="password" autocomplete="new-password" /></label>
+      <button type="button" id="register-submit">Register</button>
     </section>
 
     <section>
       <h2>2. SRP login</h2>
-      <label>Username <input id="loginUser" autocomplete="username" /></label>
-      <label>Password <input id="loginPass" type="password" autocomplete="current-password" /></label>
-      <button type="button" id="btnLogin">Login (challenge / verify)</button>
+      <label>Username <input id="login-username" autocomplete="username" /></label>
+      <label>Password <input id="login-password" type="password" autocomplete="current-password" /></label>
+      <button type="button" id="login-submit">Login (challenge / verify)</button>
     </section>
 
     <section>
-      <h2>3. Vault (encrypted note)</h2>
+      <h2>3. Data</h2>
       <p class="blurb">
-        Use the same password as registration. After register or SRP login, user id and salt are
-        stored in this browser session for PBKDF2.
+        Same password as Register or SRP login above. After register or login, user id and salt
+        are stored in this tab for PBKDF2.
       </p>
-      <label>Vault password <input id="vaultPass" type="password" /></label>
-      <label>Note <textarea id="vaultNote" placeholder="Secret text…"></textarea></label>
-      <button type="button" id="btnUpload">Encrypt &amp; upload</button>
-      <button type="button" id="btnDownload">Download &amp; decrypt</button>
-      <label>Decrypted output</label>
-      <textarea id="vaultOut" readonly placeholder="(decrypted here)"></textarea>
+      <label>Input <textarea id="data-input" placeholder="Any text…"></textarea></label>
+      <button type="button" id="upload-submit">Encrypt &amp; upload</button>
+      <button type="button" id="download-submit">Download &amp; decrypt</button>
+      <label>Output</label>
+      <textarea id="data-output" readonly placeholder="(decrypted here)"></textarea>
     </section>
 
     <section>
@@ -109,6 +45,14 @@
       <div id="log"></div>
     </section>
 
-    <script type="module" src="/assets/app.js?v=2"></script>
+    <dialog id="message-dialog" class="message-dialog" aria-labelledby="message-dialog-title">
+      <h3 id="message-dialog-title" class="message-dialog-title"></h3>
+      <p id="message-dialog-body" class="message-dialog-body"></p>
+      <button type="button" id="message-dialog-close" class="message-dialog-close">
+        OK
+      </button>
+    </dialog>
+
+    <script type="module" src="/assets/app.js"></script>
   </body>
 </html>

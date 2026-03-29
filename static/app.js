@@ -1,33 +1,53 @@
 import { createSaltedVerificationKey, SrpUser } from "./srp-client.js";
 
-const $ = (id) => document.getElementById(id);
-
-function bytesToBase64(u8) {
-  let s = "";
-  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
-  return btoa(s);
+function byId(id) {
+  return document.getElementById(id);
 }
 
-function base64ToBytes(b64) {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
+function bytesToBase64(bytes) {
+  let string = "";
+  for (let i = 0; i < bytes.length; i++) {
+    string += String.fromCharCode(bytes[i]);
+  }
+  return btoa(string);
 }
 
-function log(msg, err = false) {
-  const el = $("log");
+function base64ToBytes(base64String) {
+  const binaryString = atob(base64String);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function log(message, isError = false) {
+  const logElement = byId("log");
   const line = document.createElement("div");
-  line.className = err ? "err" : "";
-  line.textContent = msg;
-  el.prepend(line);
+  line.className = isError ? "err" : "";
+  line.textContent = message;
+  logElement.prepend(line);
 }
 
-async function deriveVaultKey(password, salt) {
-  const enc = new TextEncoder();
+function showMessageDialog(title, body, { isError = false } = {}) {
+  const dialog = byId("message-dialog");
+  byId("message-dialog-title").textContent = title;
+  byId("message-dialog-body").textContent = body;
+  dialog.classList.toggle("message-dialog--error", isError);
+  if (typeof dialog.showModal === "function") {
+    dialog.showModal();
+  }
+}
+
+byId("message-dialog-close").addEventListener("click", () => {
+  byId("message-dialog").close();
+});
+
+async function deriveDataKey(password, salt) {
+  const textEncoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
-    enc.encode(password),
+    textEncoder.encode(password),
     "PBKDF2",
     false,
     ["deriveKey"]
@@ -46,63 +66,75 @@ async function deriveVaultKey(password, salt) {
   );
 }
 
-async function encryptVault(plaintext, password, salt) {
-  const key = await deriveVaultKey(password, salt);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const enc = new TextEncoder();
-  const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+async function encryptData(plaintext, password, salt) {
+  const key = await deriveDataKey(password, salt);
+  const initializationVector = crypto.getRandomValues(new Uint8Array(12));
+  const textEncoder = new TextEncoder();
+  const ciphertextBuffer = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: initializationVector },
     key,
-    enc.encode(plaintext)
+    textEncoder.encode(plaintext)
   );
-  const u8 = new Uint8Array(ct);
-  const out = new Uint8Array(1 + iv.length + u8.length);
-  out[0] = 1;
-  out.set(iv, 1);
-  out.set(u8, 1 + iv.length);
-  return out;
+  const ciphertextBytes = new Uint8Array(ciphertextBuffer);
+  const encryptedBlob = new Uint8Array(
+    1 + initializationVector.length + ciphertextBytes.length
+  );
+  encryptedBlob[0] = 1;
+  encryptedBlob.set(initializationVector, 1);
+  encryptedBlob.set(ciphertextBytes, 1 + initializationVector.length);
+  return encryptedBlob;
 }
 
-async function decryptVault(blob, password, salt) {
-  if (blob[0] !== 1) throw new Error("Unknown vault format");
-  const iv = blob.subarray(1, 13);
-  const ct = blob.subarray(13);
-  const key = await deriveVaultKey(password, salt);
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
-  return new TextDecoder().decode(pt);
+async function decryptData(encryptedBlob, password, salt) {
+  if (encryptedBlob[0] !== 1) {
+    throw new Error("Unknown encrypted blob format");
+  }
+  const initializationVector = encryptedBlob.subarray(1, 13);
+  const ciphertext = encryptedBlob.subarray(13);
+  const key = await deriveDataKey(password, salt);
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: initializationVector },
+    key,
+    ciphertext
+  );
+  return new TextDecoder().decode(decryptedBuffer);
 }
 
-function session() {
+function readSession() {
   const raw = sessionStorage.getItem("zae");
   return raw ? JSON.parse(raw) : {};
 }
 
-function saveSession(data) {
-  const cur = session();
-  const next = { ...cur };
-  for (const [k, v] of Object.entries(data)) {
-    if (v !== undefined) next[k] = v;
+function saveSession(partial) {
+  const current = readSession();
+  const updated = { ...current };
+  for (const [key, value] of Object.entries(partial)) {
+    if (value !== undefined) updated[key] = value;
   }
-  sessionStorage.setItem("zae", JSON.stringify(next));
+  sessionStorage.setItem("zae", JSON.stringify(updated));
 }
 
-/** Vault uses the same password as SRP; allow login field when vault field is empty. */
-function vaultPassword() {
-  const v = $("vaultPass").value;
-  if (v) return v;
-  return $("loginPass").value || $("regPass").value;
+function encryptionPassword() {
+  return (
+    byId("login-password")?.value || byId("register-password")?.value || ""
+  );
 }
 
-$("btnRegister").addEventListener("click", async () => {
-  const username = $("regUser").value.trim();
-  const password = $("regPass").value;
+byId("register-submit").addEventListener("click", async () => {
+  const username = byId("register-username").value.trim();
+  const password = byId("register-password").value;
   if (!username || !password) {
-    log("Username and password required.", true);
+    const message = "Enter both username and password.";
+    log(message, true);
+    showMessageDialog("Register", message, { isError: true });
     return;
   }
   try {
-    const { salt, verifier } = await createSaltedVerificationKey(username, password);
-    const res = await fetch("/register", {
+    const { salt, verifier } = await createSaltedVerificationKey(
+      username,
+      password
+    );
+    const response = await fetch("/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -111,34 +143,43 @@ $("btnRegister").addEventListener("click", async () => {
         verifier: bytesToBase64(verifier),
       }),
     });
-    if (!res.ok) {
-      log(`Register failed: ${res.status} ${await res.text()}`, true);
+    if (!response.ok) {
+      const detail = await response.text();
+      const message = `Could not register (${response.status}). ${detail}`;
+      log(message, true);
+      showMessageDialog("Registration failed", message, { isError: true });
       return;
     }
-    const { user_id } = await res.json();
+    const { user_id } = await response.json();
     saveSession({
       user_id,
       username,
       salt_b64: bytesToBase64(salt),
     });
-    $("vaultPass").value = password;
-    log(`Registered. user_id=${user_id} (salt stored locally for vault crypto).`);
-  } catch (e) {
-    log(String(e), true);
+    const successMessage =
+      `You are registered. User id: ${user_id}.\nSalt is stored in this tab for client-side encryption.`;
+    log(`Registered. (salt stored locally for client-side encryption).`);
+    showMessageDialog("Registered", successMessage);
+  } catch (error) {
+    const message = String(error);
+    log(message, true);
+    showMessageDialog("Registration failed", message, { isError: true });
   }
 });
 
-$("btnLogin").addEventListener("click", async () => {
-  const username = $("loginUser").value.trim();
-  const password = $("loginPass").value;
+byId("login-submit").addEventListener("click", async () => {
+  const username = byId("login-username").value.trim();
+  const password = byId("login-password").value;
   if (!username || !password) {
-    log("Username and password required.", true);
+    const message = "Enter both username and password.";
+    log(message, true);
+    showMessageDialog("Login", message, { isError: true });
     return;
   }
   try {
-    const usr = await SrpUser.create(username, password);
-    const { A } = usr.startAuthentication();
-    const ch = await fetch("/srp/challenge", {
+    const srpUser = await SrpUser.create(username, password);
+    const { A } = srpUser.startAuthentication();
+    const challengeResponse = await fetch("/srp/challenge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -146,109 +187,140 @@ $("btnLogin").addEventListener("click", async () => {
         A: bytesToBase64(A),
       }),
     });
-    if (!ch.ok) {
-      log(`Challenge failed: ${ch.status} ${await ch.text()}`, true);
+    if (!challengeResponse.ok) {
+      const detail = await challengeResponse.text();
+      const message = `Challenge step failed (${challengeResponse.status}). ${detail}`;
+      log(message, true);
+      showMessageDialog("Login failed", message, { isError: true });
       return;
     }
-    const { s: sb64, B: bb64 } = await ch.json();
-    const M = await usr.processChallenge(base64ToBytes(sb64), base64ToBytes(bb64));
-    if (!M) {
-      log("SRP process_challenge failed (safety check).", true);
+    const { s: saltBase64, B: serverEphemeralBase64 } =
+      await challengeResponse.json();
+    const clientProof = await srpUser.processChallenge(
+      base64ToBytes(saltBase64),
+      base64ToBytes(serverEphemeralBase64)
+    );
+    if (!clientProof) {
+      const message = "SRP client proof could not be computed (safety check).";
+      log(message, true);
+      showMessageDialog("Login failed", message, { isError: true });
       return;
     }
-    const vf = await fetch("/srp/verify", {
+    const verifyResponse = await fetch("/srp/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username,
-        M: bytesToBase64(M),
+        M: bytesToBase64(clientProof),
       }),
     });
-    if (!vf.ok) {
-      log(`Verify failed: ${vf.status} ${await vf.text()}`, true);
+    if (!verifyResponse.ok) {
+      const detail = await verifyResponse.text();
+      const message = `Verify step failed (${verifyResponse.status}). ${detail}`;
+      log(message, true);
+      showMessageDialog("Login failed", message, { isError: true });
       return;
     }
-    const body = await vf.json();
-    const { HAMK, user_id, salt: saltB64 } = body;
-    if (user_id == null || !saltB64 || HAMK == null) {
-      log(
-        `SRP verify response missing fields (reload app / rebuild API?). ${JSON.stringify(body)}`,
-        true
-      );
+    const verifyBody = await verifyResponse.json();
+    const { HAMK, user_id, salt: saltBase64FromServer } = verifyBody;
+    if (user_id == null || !saltBase64FromServer || HAMK == null) {
+      const message = `Unexpected response from server: ${JSON.stringify(verifyBody)}`;
+      log(message, true);
+      showMessageDialog("Login failed", message, { isError: true });
       return;
     }
     saveSession({
       user_id,
       username,
-      salt_b64: saltB64,
+      salt_b64: saltBase64FromServer,
     });
-    $("vaultPass").value = password;
     log(
-      `SRP OK. Session saved for vault (user_id=${user_id}). HAMK: ${String(HAMK).slice(0, 16)}…`
+      `SRP OK. Session saved (user_id=${user_id}). HAMK: ${String(HAMK).slice(0, 16)}…`
     );
-  } catch (e) {
-    log(String(e), true);
+    const successMessage = `You are logged in.\nUser id: ${user_id}. Session data saved in this tab for encrypting data.`;
+    showMessageDialog("Logged in", successMessage);
+  } catch (error) {
+    const message = String(error);
+    log(message, true);
+    showMessageDialog("Login failed", message, { isError: true });
   }
 });
 
-$("btnUpload").addEventListener("click", async () => {
-  const s = session();
-  const user_id = s.user_id;
-  const salt = s.salt_b64 ? base64ToBytes(s.salt_b64) : null;
-  const password = vaultPassword();
-  const note = $("vaultNote").value;
-  if (user_id == null || !salt) {
+byId("upload-submit").addEventListener("click", async () => {
+  const sessionData = readSession();
+  const userId = sessionData.user_id;
+  const salt = sessionData.salt_b64
+    ? base64ToBytes(sessionData.salt_b64)
+    : null;
+  const password = encryptionPassword();
+  const plaintext = byId("data-input").value;
+  if (userId == null || !salt) {
     log("Register or complete SRP login first (session needs user id + salt).", true);
     return;
   }
   if (!password) {
-    log("Enter vault password (same as your account password), or use login/register password fields.", true);
+    log(
+      "Enter your password in Register or SRP login (used to encrypt this data).",
+      true
+    );
     return;
   }
   try {
-    const blob = await encryptVault(note, password, salt);
-    const res = await fetch("/data/upload", {
+    const encryptedBlob = await encryptData(plaintext, password, salt);
+    const uploadResponse = await fetch("/data/upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id,
-        blob: bytesToBase64(blob),
+        user_id: userId,
+        blob: bytesToBase64(encryptedBlob),
       }),
     });
-    if (!res.ok) {
-      log(`Upload failed: ${res.status} ${await res.text()}`, true);
+    if (!uploadResponse.ok) {
+      log(
+        `Upload failed: ${uploadResponse.status} ${await uploadResponse.text()}`,
+        true
+      );
       return;
     }
     log("Uploaded ciphertext (server cannot decrypt).");
-  } catch (e) {
-    log(String(e), true);
+  } catch (error) {
+    log(String(error), true);
   }
 });
 
-$("btnDownload").addEventListener("click", async () => {
-  const s = session();
-  const user_id = s.user_id;
-  const salt = s.salt_b64 ? base64ToBytes(s.salt_b64) : null;
-  const password = vaultPassword();
-  if (user_id == null || !salt) {
+byId("download-submit").addEventListener("click", async () => {
+  const sessionData = readSession();
+  const userId = sessionData.user_id;
+  const salt = sessionData.salt_b64
+    ? base64ToBytes(sessionData.salt_b64)
+    : null;
+  const password = encryptionPassword();
+  if (userId == null || !salt) {
     log("Register or complete SRP login first (session needs user id + salt).", true);
     return;
   }
   if (!password) {
-    log("Enter vault password or use login/register password field.", true);
+    log(
+      "Enter your password in Register or SRP login (used to decrypt this data).",
+      true
+    );
     return;
   }
   try {
-    const res = await fetch(`/data/${user_id}`);
-    if (!res.ok) {
-      log(`Download failed: ${res.status}`, true);
+    const downloadResponse = await fetch(`/data/${userId}`);
+    if (!downloadResponse.ok) {
+      log(`Download failed: ${downloadResponse.status}`, true);
       return;
     }
-    const { blob: b64 } = await res.json();
-    const plain = await decryptVault(base64ToBytes(b64), password, salt);
-    $("vaultOut").textContent = plain;
+    const { blob: blobBase64 } = await downloadResponse.json();
+    const decryptedText = await decryptData(
+      base64ToBytes(blobBase64),
+      password,
+      salt
+    );
+    byId("data-output").textContent = decryptedText;
     log("Decrypted in browser only.");
-  } catch (e) {
-    log(String(e), true);
+  } catch (error) {
+    log(String(error), true);
   }
 });

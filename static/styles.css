@@ -1,0 +1,94 @@
+:root {
+  font-family: system-ui, sans-serif;
+  line-height: 1.4;
+  color: #1a1a1a;
+  background: #f6f6f6;
+}
+body {
+  max-width: 40rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+h1 {
+  font-size: 1.25rem;
+}
+section {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+label {
+  display: block;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+input,
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.25rem;
+}
+textarea {
+  min-height: 5rem;
+  font-family: inherit;
+}
+button {
+  margin-top: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+}
+#log {
+  font-size: 0.8rem;
+  max-height: 10rem;
+  overflow: auto;
+  background: #111;
+  color: #cfcfcf;
+  padding: 0.75rem;
+  border-radius: 6px;
+}
+#log .err {
+  color: #f88;
+}
+.blurb {
+  font-size: 0.9rem;
+  color: #444;
+}
+
+.message-dialog {
+  max-width: 22rem;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+.message-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+.message-dialog-title {
+  margin: 0;
+  padding: 1rem 1rem 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.message-dialog-body {
+  margin: 0;
+  padding: 0 1rem 1rem;
+  font-size: 0.95rem;
+  color: #333;
+  white-space: pre-wrap;
+}
+.message-dialog.message-dialog--error .message-dialog-title {
+  color: #b00020;
+}
+.message-dialog-close {
+  display: block;
+  width: calc(100% - 2rem);
+  margin: 0 1rem 1rem;
+  padding: 0.5rem 1rem;
+}
