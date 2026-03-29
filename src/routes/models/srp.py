@@ -9,6 +9,7 @@ class SRPChallengeInput(BaseModel):
 
 
 class SRPChallengeOutput(BaseModel):
+    session_id: str
     s: bytes
     B: bytes
 
@@ -18,6 +19,7 @@ class SRPChallengeOutput(BaseModel):
 
 
 class SRPProofInput(BaseModel):
+    session_id: str
     username: str
     M: Base64Bytes
 
@@ -26,6 +28,7 @@ class SRPProofOutput(BaseModel):
     HAMK: bytes
     user_id: int
     salt: bytes
+    access_token: str
 
     @field_serializer("HAMK", "salt", when_used="json")
     def _bytes_as_b64(self, v: bytes) -> str:

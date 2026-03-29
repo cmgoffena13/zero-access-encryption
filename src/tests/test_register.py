@@ -24,6 +24,7 @@ def test_register_success_returns_register_output(client, override_get_session):
     assert r.status_code == 201
     out = RegisterOutput.model_validate(r.json())
     assert out.user_id >= 1
+    assert out.access_token
 
 
 def test_register_duplicate_returns_400(client, override_get_session):
@@ -41,4 +42,4 @@ def test_register_duplicate_returns_400(client, override_get_session):
     assert r1.status_code == 201
     r2 = client.post("/register", json=body)
     assert r2.status_code == 400
-    assert r2.json()["detail"] == "User already exists"
+    assert r2.json()["detail"] == "Registration could not be completed"

@@ -1,9 +1,11 @@
+import os
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from srp import Verifier
 
+from src.auth_tokens import create_access_token
 from src.database.models import User
 from src.database.session import SessionDep
 from src.routes.models.srp import (
@@ -12,11 +14,13 @@ from src.routes.models.srp import (
     SRPProofInput,
     SRPProofOutput,
 )
-from src.srp_session_store import SrpSessionStore, get_srp_session_store
+from src.srp_session_store import SrpSessionStore, get_srp_session_store, new_session_id
 
 srp_router = APIRouter()
 
 SrpStoreDep = Annotated[SrpSessionStore, Depends(get_srp_session_store)]
+
+AUTH_FAILED = "Authentication failed"
 
 
 @srp_router.post("/srp/challenge")
@@ -25,27 +29,29 @@ async def srp_challenge(
     session: SessionDep,
     srp_store: SrpStoreDep,
 ):
+    session_id = new_session_id()
     result = await session.exec(select(User).where(User.username == input.username))
     user = result.first()
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
+        dummy_s = os.urandom(4)
+        dummy_B = os.urandom(256)
+        return SRPChallengeOutput(session_id=session_id, s=dummy_s, B=dummy_B)
 
     salt = user.salt
     verifier = user.verifier
-    A = input.A
-    svr = Verifier(input.username.encode(), salt, verifier, A)
+    bytes_A = input.A
+    svr = Verifier(input.username.encode(), salt, verifier, bytes_A)
 
     s, B = svr.get_challenge()
     if s is None or B is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=AUTH_FAILED
+        )
 
-    await srp_store.store(input.username, svr)
+    bytes_b = svr.get_ephemeral_secret()
+    await srp_store.store(session_id, input.username, bytes_A, bytes_b)
 
-    output = SRPChallengeOutput(s=s, B=B)
-
-    return output
+    return SRPChallengeOutput(session_id=session_id, s=s, B=B)
 
 
 @srp_router.post("/srp/verify")
@@ -54,27 +60,44 @@ async def srp_proof(
     session: SessionDep,
     srp_store: SrpStoreDep,
 ):
-    username = input.username
-    svr = await srp_store.pop(username)
-    if svr is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+    state = await srp_store.pop(input.session_id)
+    if state is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=AUTH_FAILED
+        )
+    username, bytes_A, bytes_b = state
+    if username != input.username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=AUTH_FAILED
+        )
+
     M_bytes = input.M
-
-    HAMK_bytes = svr.verify_session(M_bytes)
-
-    if HAMK_bytes is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     result = await session.exec(select(User).where(User.username == username))
     user = result.first()
     if user is None or user.id is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=AUTH_FAILED
         )
 
-    output = SRPProofOutput(
+    svr = Verifier(
+        username.encode(),
+        user.salt,
+        user.verifier,
+        bytes_A,
+        bytes_b=bytes_b,
+    )
+    HAMK_bytes = svr.verify_session(M_bytes)
+
+    if HAMK_bytes is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=AUTH_FAILED
+        )
+
+    access_token = create_access_token(user.id)
+    return SRPProofOutput(
         HAMK=HAMK_bytes,
         user_id=user.id,
         salt=user.salt,
+        access_token=access_token,
     )
-    return output

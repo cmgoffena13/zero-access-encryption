@@ -4,7 +4,6 @@ from pydantic import Base64Bytes, BaseModel, field_serializer
 
 
 class DataUploadInput(BaseModel):
-    user_id: int
     blob: Base64Bytes
 
 

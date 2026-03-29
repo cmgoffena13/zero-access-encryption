@@ -17,6 +17,7 @@ class GlobalConfig(BaseConfig):
     LOG_LEVEL: LogLevel = "INFO"
     DATABASE_URL: Optional[str] = None
     REDIS_URL: Optional[str] = None
+    JWT_SECRET: str = "dev-only-jwt-secret-min-32-chars-long-change-in-prod"
 
 
 class DevConfig(GlobalConfig):

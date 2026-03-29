@@ -150,11 +150,12 @@ byId("register-submit").addEventListener("click", async () => {
       showMessageDialog("Registration failed", message, { isError: true });
       return;
     }
-    const { user_id } = await response.json();
+    const { user_id, access_token } = await response.json();
     saveSession({
       user_id,
       username,
       salt_b64: bytesToBase64(salt),
+      access_token,
     });
     const successMessage =
       `You are registered. User id: ${user_id}.\nSalt is stored in this tab for client-side encryption.`;
@@ -194,8 +195,11 @@ byId("login-submit").addEventListener("click", async () => {
       showMessageDialog("Login failed", message, { isError: true });
       return;
     }
-    const { s: saltBase64, B: serverEphemeralBase64 } =
-      await challengeResponse.json();
+    const {
+      s: saltBase64,
+      B: serverEphemeralBase64,
+      session_id: sessionId,
+    } = await challengeResponse.json();
     const clientProof = await srpUser.processChallenge(
       base64ToBytes(saltBase64),
       base64ToBytes(serverEphemeralBase64)
@@ -210,6 +214,7 @@ byId("login-submit").addEventListener("click", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        session_id: sessionId,
         username,
         M: bytesToBase64(clientProof),
       }),
@@ -222,17 +227,32 @@ byId("login-submit").addEventListener("click", async () => {
       return;
     }
     const verifyBody = await verifyResponse.json();
-    const { HAMK, user_id, salt: saltBase64FromServer } = verifyBody;
-    if (user_id == null || !saltBase64FromServer || HAMK == null) {
+    const {
+      HAMK,
+      user_id,
+      salt: saltFromServer,
+      access_token: accessToken,
+    } = verifyBody;
+    if (
+      user_id == null ||
+      !saltFromServer ||
+      HAMK == null ||
+      accessToken == null
+    ) {
       const message = `Unexpected response from server: ${JSON.stringify(verifyBody)}`;
       log(message, true);
       showMessageDialog("Login failed", message, { isError: true });
       return;
     }
+    const saltB64 =
+      typeof saltFromServer === "string"
+        ? saltFromServer
+        : bytesToBase64(saltFromServer);
     saveSession({
       user_id,
       username,
-      salt_b64: saltBase64FromServer,
+      salt_b64: saltB64,
+      access_token: accessToken,
     });
     log(
       `SRP OK. Session saved (user_id=${user_id}). HAMK: ${String(HAMK).slice(0, 16)}…`
@@ -258,6 +278,10 @@ byId("upload-submit").addEventListener("click", async () => {
     log("Register or complete SRP login first (session needs user id + salt).", true);
     return;
   }
+  if (!sessionData.access_token) {
+    log("No access token — register or log in again.", true);
+    return;
+  }
   if (!password) {
     log(
       "Enter your password in Register or SRP login (used to encrypt this data).",
@@ -269,9 +293,11 @@ byId("upload-submit").addEventListener("click", async () => {
     const encryptedBlob = await encryptData(plaintext, password, salt);
     const uploadResponse = await fetch("/data/upload", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sessionData.access_token}`,
+      },
       body: JSON.stringify({
-        user_id: userId,
         blob: bytesToBase64(encryptedBlob),
       }),
     });
@@ -299,6 +325,10 @@ byId("download-submit").addEventListener("click", async () => {
     log("Register or complete SRP login first (session needs user id + salt).", true);
     return;
   }
+  if (!sessionData.access_token) {
+    log("No access token — register or log in again.", true);
+    return;
+  }
   if (!password) {
     log(
       "Enter your password in Register or SRP login (used to decrypt this data).",
@@ -307,7 +337,11 @@ byId("download-submit").addEventListener("click", async () => {
     return;
   }
   try {
-    const downloadResponse = await fetch(`/data/${userId}`);
+    const downloadResponse = await fetch(`/data/${userId}`, {
+      headers: {
+        Authorization: `Bearer ${sessionData.access_token}`,
+      },
+    });
     if (!downloadResponse.ok) {
       log(`Download failed: ${downloadResponse.status}`, true);
       return;

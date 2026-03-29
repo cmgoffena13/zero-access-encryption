@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlmodel import select
 
+from src.auth_tokens import create_access_token
 from src.database.models import User
 from src.database.session import SessionDep
 from src.routes.models.register import RegisterInput, RegisterOutput
+
+REGISTRATION_FAILED = "Registration could not be completed"
 
 register_router = APIRouter()
 
@@ -20,7 +23,7 @@ async def register(
     ).first()
     if user_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=REGISTRATION_FAILED
         )
     try:
         session.add(user)
@@ -38,5 +41,8 @@ async def register(
         )
 
     response.status_code = status.HTTP_201_CREATED
-    output = RegisterOutput(user_id=user.id)
+    output = RegisterOutput(
+        user_id=user.id,
+        access_token=create_access_token(user.id),
+    )
     return output

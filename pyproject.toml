@@ -11,6 +11,7 @@ dependencies = [
     "orjson>=3.11.7",
     "prek>=0.3.8",
     "pydantic-settings>=2.13.1",
+    "pyjwt>=2.12.1",
     "redis>=7.4.0",
     "rich>=14.3.3",
     "scalar-fastapi>=1.8.1",
